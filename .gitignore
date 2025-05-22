@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environment
+venv/
+.env/
+ENV/
+
+/node_modules/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Sensitive files
+.env
+*.env
+secrets.json
+
+# Data files
+*.sqlite3
+*.db
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.parquet
+*.h5
+*.hdf5
+
+# Images, results, and outputs
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.pdf
+*.out
+*.result
+*.tmp
+
+# Other
+*.bak
+*.swp
+*.swo
+
+# Ignore your own README if you want to keep local changes
+# README.md 
