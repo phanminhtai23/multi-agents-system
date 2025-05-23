@@ -6,7 +6,7 @@ import os
 
 import os
 os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
-os.environ["GOOGLE_API_KEY"] = "AIzaSyASiMHE6d5tgL-cJ5vrdS0OHtopFPTauG0"
+os.environ["GOOGLE_API_KEY"] = ""
 
 load_dotenv("./.env")
 print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
