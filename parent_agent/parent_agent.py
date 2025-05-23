@@ -1,51 +1,74 @@
 import asyncio
 from dotenv import load_dotenv
+import os
 from google.genai import types
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams, StdioServerParameters
-from sub_agents.agent_slack import get_slack_agent
+from google.adk.tools.agent_tool import AgentTool
+from google.adk.tools import google_search
+from google.adk.tools import LongRunningFunctionTool
 
+# google_search_tool = LongRunningFunctionTool(func=google_search)
+# from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams, StdioServerParameters
+from sub_agents.slack_agent import get_slack_agent
+from sub_agents.playwright_agent import get_playwright_agent
+from sub_agents.search_web_agent import get_search_web_agent
 
 # Load environment variables
 load_dotenv('../.env')
+print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
 
 # --- Step 1: Agent Definition (Không thay đổi) ---
 async def get_agent_async():
     """Creates an ADK Agent equipped with tools from the MCP Server."""
     print("Connecting to MCP server to fetch tools...")
     try:
-        tools, exit_stack = await MCPToolset.from_server(
-            connection_params=SseServerParams(url="http://localhost:8931/sse")
+        # tools, exit_stack = await MCPToolset.from_server(
+        #     connection_params=SseServerParams(url="http://localhost:8931/sse")
 
-            # connection_params=StdioServerParameters(
-            #     command='npx',
-            #     args=["-y",    # Arguments for the command
-            #         "@playwright/mcp@latest",
-            #         # "--vision",
-            #     ],
-            # ) 
-        )
+        #     connection_params=StdioServerParameters(
+        #         command='npx',
+        #         args=["-y",    # Arguments for the command
+        #             "@playwright/mcp@latest",
+        #             # "--vision",
+        #         ],
+        #     ) 
+        # )
         # tools1, exit_stack = await MCPToolset.from_server(
         #     # connection_params=SseServerParams(url="http://localhost:8931/sse")
         #     connection_params=SseServerParams(url="")
         # )
+
+        # Get sub agents
         slack_agent = await get_slack_agent()
-        print(f"Fetched {len(tools)} tools from Playwright MCP server.")
-        # print(f"Fetched {len(tools1)} tools from Slack MCP server .")
+        playwright_agent = await get_playwright_agent()
+        # search_web_agent = get_search_web_agent()
+
+        print(f"Get sub agents successfully")
         root_agent = LlmAgent(
             model='gemini-2.0-flash', # Hoặc model bạn muốn dùng
-            name='interactive_mcp_slack_assistant',
-            description='A parent agent that handles browser automation tasks directly and delegates Slack-related operations to a specialized Slack agent. Can perform web searches, open websites, find movies, and manage various online interactions while efficiently routing Slack communications to the appropriate sub-agent.',
-            instruction='You are a versatile parent agent that processes user requests and handles various tasks. For browser-related tasks like web browsing, searching for movies, or accessing online content, you will use the appropriate provided tools directly. When requests involve Slack interactions (messaging, channel management, user communication), you will delegate those tasks to the specialized slack_agent. Analyze each request carefully to determine the best approach and tools to use.',
-            tools=tools,
-            sub_agents=[slack_agent]
+            name='root_agent',
+            description='A primary agent capable of analyzing user requests, breaking them down into smaller steps, and assigning tasks to appropriate sub-agents. This agent manages coordination between sub-agents and synthesizes results to provide the final answer.',
+
+            instruction="""You are a primary agent responsible for receiving user input, analyzing and breaking it down into steps for resolution. If there is a suitable sub-agent to handle a specific step, delegate the task to that agent. Sub-agents include: 
+
+            1. Slack Agent - If the tasks relative interaction in Slack application lets delegate for this agent.
+            2. Playwright Agent - If the task realtive interaction with web browsing and automation tasks like open Youtube or search google automaticlly let delegrate for this agent. 
+
+
+            And you have `google_search` like a tool to find ealtime information or things which user want to know let use this tool. If you can answer the input let analyze the work and communicate to the sub-agent appropriately """,
+            # For complex tasks requiring multiple steps, use the available tools to solve each small step, then synthesize the results to provide a complete answer to the user.
+            # 3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
+            tools=[google_search],
+            sub_agents=[slack_agent, playwright_agent]
         )
-        return root_agent, exit_stack
+        # return root_agent
+        return root_agent, None # Giả sử không có exit_stack từ MCPToolset ở đây
     except Exception as e:
         print(f"Error connecting to MCP server or creating agent: {e}")
+        # return None
         return None, None
 
 # --- Step 2: Main Execution Logic with Interactive Loop ---
@@ -53,9 +76,10 @@ async def async_main():
     session_service = InMemorySessionService()
     artifacts_service = InMemoryArtifactService() # Thường là tùy chọn nếu không dùng artifacts
 
-    # Tạo agent và exit_stack một lần ở đầu
-    root_agent, exit_stack = await get_agent_async()
-    if not root_agent or not exit_stack:
+    # Tạo agent
+    # root_agent = await get_agent_async()
+    root_agent, exit_stack = await get_agent_async() # Lấy cả exit_stack
+    if not root_agent:
         print("Failed to initialize agent. Exiting.")
         return
 
@@ -109,7 +133,7 @@ async def async_main():
                 session_id=session.id, user_id=session.user_id, new_message=user_message_content
             ):
                 # Bỏ comment để debug:
-                # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
+                print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
 
                 if event.is_final_response():
                     if event.content and event.content.parts:
@@ -144,8 +168,13 @@ async def async_main():
     finally:
         # Dọn dẹp quan trọng
         print("Closing MCP server connection...")
+        # if exit_stack: # Đảm bảo exit_stack tồn tại trước khi gọi aclose
+        #     await exit_stack.aclose()
         if exit_stack: # Đảm bảo exit_stack tồn tại trước khi gọi aclose
-            await exit_stack.aclose()
+            try:
+                await exit_stack.aclose()
+            except Exception as e:
+                print(f"Error during exit_stack.aclose(): {e}")
         print("Cleanup complete.")
 
 if __name__ == '__main__':
