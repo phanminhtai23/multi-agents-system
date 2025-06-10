@@ -36,13 +36,13 @@ def start_mcp_server(port=8931):
         # Đợi server khởi động
         time.sleep(3)
         
-        # # Kiểm tra xem process có chạy không
-        # if mcp_process.poll() is None:
-        #     print(f"✅ MCP server started successfully on port {port}")
-        #     return mcp_process
-        # else:
-        #     print(f"❌ Failed to start MCP server")
-        #     return None
+        # Kiểm tra xem process có chạy không
+        if mcp_process.poll() is None:
+            print(f"✅ MCP server started successfully on port {port}")
+            return mcp_process
+        else:
+            print(f"❌ Failed to start MCP server")
+            return None
             
     except Exception as e:
         print(f"❌ Error starting MCP server: {e}")

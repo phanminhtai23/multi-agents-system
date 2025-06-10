@@ -9,7 +9,7 @@ from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactServ
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools import google_search
 from google.adk.tools import LongRunningFunctionTool
-
+import contextlib  # Thêm import này
 # google_search_tool = LongRunningFunctionTool(func=google_search)
 # from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams, StdioServerParameters
 from sub_agents.slack_agent import get_slack_agent
@@ -17,11 +17,12 @@ from sub_agents.playwright_agent import get_playwright_agent
 from sub_agents.search_web_agent import get_search_web_agent
 
 # Load environment variables
-load_dotenv('../.env')
-print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
+# load_dotenv('./.env')
+# print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
 
 # --- Step 1: Agent Definition (Không thay đổi) ---
 async def get_agent_async():
+    combined_exit_stack = contextlib.AsyncExitStack()
     """Creates an ADK Agent equipped with tools from the MCP Server."""
     print("Connecting to MCP server to fetch tools...")
     try:
@@ -42,10 +43,16 @@ async def get_agent_async():
         # )
 
         # Get sub agents
-        slack_agent = await get_slack_agent()
-        playwright_agent = await get_playwright_agent()
+        slack_agent, slack_exit_stack = await get_slack_agent()
+        # playwright_agent, playwright_exit_stack = await get_playwright_agent()
         # search_web_agent = get_search_web_agent()
 
+        # if slack_exit_stack:
+        #     # Nếu slack_exit_stack là một context manager (thường là vậy từ MCPToolset)
+        #     await combined_exit_stack.enter_async_context(slack_exit_stack)
+        # if playwright_exit_stack:
+        #     # Nếu playwright_exit_stack là một context manager (thường là vậy từ MCPToolset)
+        #     await combined_exit_stack.enter_async_context(playwright_exit_stack)
         print(f"Get sub agents successfully")
         root_agent = LlmAgent(
             model='gemini-2.0-flash', # Hoặc model bạn muốn dùng
@@ -62,7 +69,7 @@ async def get_agent_async():
             # For complex tasks requiring multiple steps, use the available tools to solve each small step, then synthesize the results to provide a complete answer to the user.
             # 3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
             tools=[google_search],
-            sub_agents=[slack_agent, playwright_agent]
+            sub_agents=[slack_agent]
         )
         # return root_agent
         return root_agent, None # Giả sử không có exit_stack từ MCPToolset ở đây
@@ -86,12 +93,12 @@ async def async_main():
     # Tạo session một lần cho toàn bộ vòng lặp tương tác
     # Điều này cho phép agent có thể nhớ ngữ cảnh giữa các lượt (tùy thuộc vào cách LlmAgent và session_service xử lý)
     session = session_service.create_session(
-        state={}, app_name='interactive_mcp_app', user_id='interactive_user'
+        state={}, app_name='mcp_app', user_id='user_app'
     )
     print(f"Session created with ID: {session.id}")
 
     runner = Runner(
-        app_name='interactive_mcp_app',
+        app_name='mcp_app_aaa',
         agent=root_agent,
         artifact_service=artifacts_service,
         session_service=session_service,
@@ -133,7 +140,7 @@ async def async_main():
                 session_id=session.id, user_id=session.user_id, new_message=user_message_content
             ):
                 # Bỏ comment để debug:
-                print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
+                # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
 
                 if event.is_final_response():
                     if event.content and event.content.parts:

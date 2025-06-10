@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 import os
 
 import os
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
-os.environ["GOOGLE_API_KEY"] = ""
+# os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
+# os.environ["GOOGLE_API_KEY"] = ""
 
 load_dotenv("./.env")
 print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     try:
         # Khởi động MCP server trước
         # print("🚀 Đang khởi động MCP server...")
-        mcp_process = start_mcp_server(MCP_SERVER_PORT)
+        # mcp_process = start_mcp_server(MCP_SERVER_PORT)
 
         # Chạy main agent
         print("🤖 Đang khởi động Parent Agent...")
@@ -32,6 +32,6 @@ if __name__ == '__main__':
         traceback.print_exc()
     finally:
         # Đảm bảo dừng MCP server khi kết thúc
-        print("🔧 Đang dọn dẹp và dừng MCP server...")
-        stop_mcp_server()
+        # print("🔧 Đang dọn dẹp và dừng MCP server...")
+        # stop_mcp_server()
         print("👋 Tạm biệt!")

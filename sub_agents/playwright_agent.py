@@ -12,7 +12,7 @@ async def get_playwright_agent():
     playwright_tools, exit_stack = await MCPToolset.from_server(
             connection_params=SseServerParams(url=f"http://localhost:{MCP_SERVER_PORT}/sse")
             # connection_params=StdioServerParameters(
-            #     command='python',
+            #     command='python', 
             #     args=["-y",    # Arguments for the command
             #         "@playwright/mcp@latest",
             #         # "--vision",
@@ -28,4 +28,4 @@ async def get_playwright_agent():
         tools=playwright_tools,
     )
 
-    return slack_agent
+    return slack_agent, exit_stack

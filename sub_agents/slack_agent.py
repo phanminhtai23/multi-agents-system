@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv('../.env')
 SLACK_MCP_URL = os.getenv('SLACK_MCP_URL', "https://mcp.pipedream.net/e23c22c5-a414-47db-907f-cb0ca7690055/slack")
-# MCP_SERVER_PORT = os.getenv('MCP_SERVER_PORT')
+MCP_SERVER_PORT = os.getenv('MCP_SERVER_PORT')
 
 async def get_slack_agent():
 
@@ -15,6 +15,15 @@ async def get_slack_agent():
     tools1, exit_stack = await MCPToolset.from_server(
             # connection_params=SseServerParams(url=f"http://localhost:{MCP_SERVER_PORT}/sse")
             connection_params=SseServerParams(url=SLACK_MCP_URL)
+            # connection_params=StdioServerParameters(
+            #     command= "npx",
+            #     args = [
+            #         "-y",
+            #         "supergateway",
+            #         "--sse",
+            #         "https://mcp.pipedream.net/e23c22c5-a414-47db-907f-cb0ca7690055/slack"
+            #     ]
+            # )
     )
     print(f"Fetched {len(tools1)} tools from Slack MCP server.")
     slack_agent = Agent(
@@ -25,4 +34,4 @@ async def get_slack_agent():
         tools=tools1,
     )
 
-    return slack_agent
+    return slack_agent, exit_stack
