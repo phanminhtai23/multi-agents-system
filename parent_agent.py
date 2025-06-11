@@ -17,7 +17,7 @@ from sub_agents.playwright_agent import get_playwright_agent
 from sub_agents.search_web_agent import get_search_web_agent
 
 # Load environment variables
-# load_dotenv('./.env')
+load_dotenv('./.env')
 # print(f"DEBUG: GOOGLE_API_KEY sau khi load_dotenv: {os.getenv('GOOGLE_API_KEY')}")
 
 # --- Step 1: Agent Definition (Không thay đổi) ---
@@ -43,9 +43,9 @@ async def get_agent_async():
         # )
 
         # Get sub agents
-        slack_agent, slack_exit_stack = await get_slack_agent()
-        # playwright_agent, playwright_exit_stack = await get_playwright_agent()
-        # search_web_agent = get_search_web_agent()
+        slack_agent = await get_slack_agent()
+        playwright_agent = await get_playwright_agent()
+        search_web_agent = get_search_web_agent()
 
         # if slack_exit_stack:
         #     # Nếu slack_exit_stack là một context manager (thường là vậy từ MCPToolset)
@@ -55,7 +55,7 @@ async def get_agent_async():
         #     await combined_exit_stack.enter_async_context(playwright_exit_stack)
         print(f"Get sub agents successfully")
         root_agent = LlmAgent(
-            model='gemini-2.0-flash', # Hoặc model bạn muốn dùng
+            model='gemini-2.5-flash-preview-05-20', # Hoặc model bạn muốn dùng
             name='root_agent',
             description='A primary agent capable of analyzing user requests, breaking them down into smaller steps, and assigning tasks to appropriate sub-agents. This agent manages coordination between sub-agents and synthesizes results to provide the final answer.',
 
@@ -63,16 +63,16 @@ async def get_agent_async():
 
             1. Slack Agent - If the tasks relative interaction in Slack application lets delegate for this agent.
             2. Playwright Agent - If the task realtive interaction with web browsing and automation tasks like open Youtube or search google automaticlly let delegrate for this agent. 
+            3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
 
-
-            And you have `google_search` like a tool to find ealtime information or things which user want to know let use this tool. If you can answer the input let analyze the work and communicate to the sub-agent appropriately """,
+            # And you have `google_search` like a tool to find ealtime information or things which user want to know let use this tool. If you can answer the input let analyze the work and communicate to the sub-agent appropriately """,
             # For complex tasks requiring multiple steps, use the available tools to solve each small step, then synthesize the results to provide a complete answer to the user.
             # 3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
-            tools=[google_search],
-            sub_agents=[slack_agent]
+            tools=[],
+            sub_agents=[slack_agent, playwright_agent, search_web_agent]
         )
         # return root_agent
-        return root_agent, None # Giả sử không có exit_stack từ MCPToolset ở đây
+        return root_agent, combined_exit_stack # Giả sử không có exit_stack từ MCPToolset ở đây
     except Exception as e:
         print(f"Error connecting to MCP server or creating agent: {e}")
         # return None
@@ -80,8 +80,7 @@ async def get_agent_async():
 
 # --- Step 2: Main Execution Logic with Interactive Loop ---
 async def async_main():
-    session_service = InMemorySessionService()
-    artifacts_service = InMemoryArtifactService() # Thường là tùy chọn nếu không dùng artifacts
+    # artifacts_service = InMemoryArtifactService() # Thường là tùy chọn nếu không dùng artifacts
 
     # Tạo agent
     # root_agent = await get_agent_async()
@@ -92,15 +91,19 @@ async def async_main():
 
     # Tạo session một lần cho toàn bộ vòng lặp tương tác
     # Điều này cho phép agent có thể nhớ ngữ cảnh giữa các lượt (tùy thuộc vào cách LlmAgent và session_service xử lý)
-    session = session_service.create_session(
-        state={}, app_name='mcp_app', user_id='user_app'
+    session_service = InMemorySessionService()
+    session = await session_service.create_session(
+        state={}, app_name='mcp_app111', user_id='user_app111'
     )
+
     print(f"Session created with ID: {session.id}")
 
+
+
     runner = Runner(
-        app_name='mcp_app_aaa',
+        app_name='mcp_app111',
         agent=root_agent,
-        artifact_service=artifacts_service,
+        # artifact_service=artifacts_service,
         session_service=session_service,
     )
 
@@ -135,6 +138,7 @@ async def async_main():
             print("<<< Agent thinking...")
             final_response_text = "Agent did not produce a final response." # Giá trị mặc định
             has_responded = False
+
 
             async for event in runner.run_async(
                 session_id=session.id, user_id=session.user_id, new_message=user_message_content

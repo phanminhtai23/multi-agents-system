@@ -1,4 +1,4 @@
-from parent_agent.parent_agent import async_main
+from parent_agent import async_main
 from mcp_server.mcp_server import start_mcp_server, stop_mcp_server
 import asyncio
 from dotenv import load_dotenv

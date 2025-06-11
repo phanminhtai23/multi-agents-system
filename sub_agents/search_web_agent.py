@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 from google.adk.tools import google_search
 
 def get_search_web_agent():
-    search_web_agent = Agent(
+    search_web_agent = LlmAgent(
             model="gemini-2.0-flash",
             name="search_web_agent", # Keep original name for consistency
             instruction="You are Search Web Agent, you can use 'google_search' tool to answer questions about realtime data",
