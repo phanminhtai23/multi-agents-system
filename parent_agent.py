@@ -5,16 +5,34 @@ from google.genai import types
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.adk.tools import agent_tool
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools import google_search
 from google.adk.tools import LongRunningFunctionTool
+# from google.genai.adk import RunConfig, StreamingMode
+# from google.genai.adk import RunConfig, StreamingMode
+from google.adk.agents.run_config import RunConfig, StreamingMode
+import warnings
+# Ignore all warnings
+warnings.filterwarnings("ignore")
+
+import logging
+logging.basicConfig(level=logging.ERROR)
+
+from google.genai import types
 import contextlib  # Thêm import này
 # google_search_tool = LongRunningFunctionTool(func=google_search)
 # from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams, StdioServerParameters
 from sub_agents.slack_agent import get_slack_agent
 from sub_agents.playwright_agent import get_playwright_agent
 from sub_agents.search_web_agent import get_search_web_agent
+
+config = RunConfig(
+    streaming_mode=StreamingMode.SSE,
+    support_cfc=True,
+    max_llm_calls=150
+)
 
 # Load environment variables
 load_dotenv('./.env')
@@ -43,8 +61,8 @@ async def get_agent_async():
         # )
 
         # Get sub agents
-        slack_agent = await get_slack_agent()
-        playwright_agent = await get_playwright_agent()
+        slack_agent =  await get_slack_agent()
+        playwright_agent =  await get_playwright_agent()
         search_web_agent = get_search_web_agent()
 
         # if slack_exit_stack:
@@ -63,13 +81,15 @@ async def get_agent_async():
 
             1. Slack Agent - If the tasks relative interaction in Slack application lets delegate for this agent.
             2. Playwright Agent - If the task realtive interaction with web browsing and automation tasks like open Youtube or search google automaticlly let delegrate for this agent. 
-            3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
 
-            # And you have `google_search` like a tool to find ealtime information or things which user want to know let use this tool. If you can answer the input let analyze the work and communicate to the sub-agent appropriately """,
+            And you have `google_search` like a agent tool to find ealtime information or things which user want to know let use this tool. If you can answer the input let analyze the work and communicate to the sub-agent appropriately 
+
             # For complex tasks requiring multiple steps, use the available tools to solve each small step, then synthesize the results to provide a complete answer to the user.
+            """,
+
             # 3. Search Web Agent - If the task relative realtime information or things which user want to know let delegrate for this agent.
-            tools=[],
-            sub_agents=[slack_agent, playwright_agent, search_web_agent]
+            tools=[agent_tool.AgentTool(agent=search_web_agent)],
+            sub_agents=[slack_agent, playwright_agent]
         )
         # return root_agent
         return root_agent, combined_exit_stack # Giả sử không có exit_stack từ MCPToolset ở đây
@@ -77,6 +97,7 @@ async def get_agent_async():
         print(f"Error connecting to MCP server or creating agent: {e}")
         # return None
         return None, None
+
 
 # --- Step 2: Main Execution Logic with Interactive Loop ---
 async def async_main():
@@ -95,7 +116,7 @@ async def async_main():
     session = await session_service.create_session(
         state={}, app_name='mcp_app111', user_id='user_app111'
     )
-
+    print(f" List session: {await session_service.list_sessions(app_name='mcp_app111', user_id='user_app111')}")
     print(f"Session created with ID: {session.id}")
 
 
@@ -135,44 +156,46 @@ async def async_main():
 
             user_message_content = types.Content(role='user', parts=[types.Part(text=query)])
 
-            print("<<< Agent thinking...")
-            final_response_text = "Agent did not produce a final response." # Giá trị mặc định
-            has_responded = False
-
+            print("<<< Agent thinking...\n", end="", flush=True)
 
             async for event in runner.run_async(
                 session_id=session.id, user_id=session.user_id, new_message=user_message_content
             ):
-                # Bỏ comment để debug:
-                # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
+                # print(f"Event from: {event.author}")
 
-                if event.is_final_response():
-                    if event.content and event.content.parts:
-                        final_response_text = event.content.parts[0].text
-                    elif event.actions and event.actions.escalate:
-                        final_response_text = f"Agent escalated: {event.error_message or 'No specific message.'}"
+                if event.content and event.content.parts:
+                    function_calls = event.get_function_calls()
+                    function_responses = event.get_function_responses()
+
+                    if function_calls:
+                        for call in function_calls:
+                            if call.name == "transfer_to_agent":
+                                print(f"<<< Signal: Transfer to {call.args['agent_name']}")
+                            else:
+                                print(f"<<< Call Tool: {call.name}, Args: {call.args}")
+                    elif function_responses:
+                        for response in function_responses:
+                            tool_name = response.name
+                            result_dict = response.response 
+                            # print(f"<<< Tool Result: {tool_name} -> {result_dict}")
+                    elif event.content.parts[0].text:
+                        if event.partial:  #streaming response
+                            print(event.content.parts[0].text, end="", flush=True)
+                        else: #final response
+                            print(f"<<< Agent: {event.content.parts[0].text}\n")
+                            
                     else:
-                        # Đôi khi final_response có thể không có content.parts trực tiếp
-                        # mà có thể là một thông báo ngầm hoặc chỉ là kết thúc tool call.
-                        # Tùy thuộc vào cách agent được thiết kế.
-                        # Trong trường hợp này, nếu không có text cụ thể, có thể giữ thông báo mặc định
-                        # hoặc kiểm tra các thuộc tính khác của event.
-                        pass # Giữ final_response_text mặc định hoặc xử lý khác
-                    has_responded = True
-                    break # Dừng khi có phản hồi cuối cùng
-
-            if not has_responded and final_response_text == "Agent did not produce a final response.":
-                 # Nếu agent không có final_response rõ ràng mà có thể chỉ thực thi tool
-                 # bạn có thể muốn một thông báo khác.
-                 # Hoặc kiểm tra event.intermediate_steps, event.actions nếu cần.
-                 # Ví dụ, nếu có tool_code_output mà không có final LLM response:
-                 # last_tool_output = ""
-                 # async for ev_debug in runner.run_async(...): # phải chạy lại hoặc lưu trữ event
-                 #    if ev_debug.tool_code_output: last_tool_output = ev_debug.tool_code_output.outputs[0].text
-                 # if last_tool_output: final_response_text = f"[Tool executed, no explicit LLM response. Last output: {last_tool_output[:100]}...]"
-                 pass # Giữ nguyên
-
-            print(f"<<< Agent: {final_response_text}\n")
+                        print("<<< Agent: Other Content (e.g., code result)", end="", flush=True)
+                elif event.actions and (event.actions.state_delta or event.actions.artifact_delta):
+                    print("  Agent: State/Artifact Update", end="", flush=True)
+                else:   
+                    if event.actions:
+                        if event.actions.transfer_to_agent:
+                            print(f"  Signal: Transfer to {event.actions.transfer_to_agent}")
+                        if event.actions.escalate:
+                            print("  Signal: Escalate (terminate loop)")
+                        if event.actions.skip_summarization:
+                            print("  Signal: Skip summarization for tool result")
 
     except KeyboardInterrupt:
         print("\nCaught interrupt, exiting chat...")
@@ -187,6 +210,7 @@ async def async_main():
             except Exception as e:
                 print(f"Error during exit_stack.aclose(): {e}")
         print("Cleanup complete.")
+
 
 if __name__ == '__main__':
     try:

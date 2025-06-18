@@ -33,10 +33,17 @@ async def get_playwright_agent():
         model="gemini-2.0-flash",
         name="playwright_agent",
         description="Handle web automation tasks using Playwright tools provided.",
-        instruction="You are the Playwright Agent. Your task is to interact with web browsers using the provided tools. Do not perform any other actions.",
+        instruction="You are the Playwright Agent. Your task is to interact with web browsers using the provided tools. If you don't know the answer, let move on to the root agent to handle the task.",
         tools=[MCPToolset(
-                connection_params=SseServerParams(url=f"http://localhost:{MCP_SERVER_PORT}/sse")
-
+            connection_params=SseServerParams(url=f"http://localhost:{MCP_SERVER_PORT}/sse")
+            # connection_params=StdioServerParameters(
+            #     command='npx', 
+            #     args=["-y",    # Arguments for the command
+            #         "@playwright/mcp@latest",
+            #         # "--port",
+            #         # "8931",
+            #     ],
+            # )
         )],
     )
 
